@@ -1,6 +1,7 @@
 ﻿using Application.Customers.Create;
 using ErrorOr;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Web.API.Controllers;
@@ -10,6 +11,7 @@ public class CustomerController(ISender mediator) : ApiController
 {
     private readonly ISender _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
 
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateCustomerCommand command)
     {
