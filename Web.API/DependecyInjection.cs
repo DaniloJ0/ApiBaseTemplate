@@ -1,4 +1,5 @@
 ﻿using Microsoft.OpenApi.Models;
+using Web.API.Middlewares;
 
 namespace Web.API;
 
@@ -38,6 +39,8 @@ public static class DependecyInjection
                 { jwtSecurityScheme , Array.Empty<string>() }
             });
         });
+
+        services.AddTransient<GloblalExceptionHandlingMiddleware>();
 
         return services;
     }
