@@ -17,6 +17,7 @@ public class GloblalExceptionHandlingMiddleware(ILogger<GloblalExceptionHandling
         catch (Exception ex)
         {
             _logger.LogError("{Message}", ex.Message);
+            Console.WriteLine(ex.Message);
 
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
 

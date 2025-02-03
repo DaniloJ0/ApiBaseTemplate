@@ -25,6 +25,8 @@ app.UseExceptionHandler("/error"); // <-- Se agrega
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication(); // Arriba de UseAuthorization
+
 app.UseAuthorization();
 
 app.UseMiddleware<GloblalExceptionHandlingMiddleware>();

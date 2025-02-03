@@ -7,11 +7,11 @@ using Microsoft.AspNetCore.Mvc;
 namespace Web.API.Controllers;
 
 [Route("Customers")]
+[Authorize]
 public class CustomerController(ISender mediator) : ApiController
 {
     private readonly ISender _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
 
-    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateCustomerCommand command)
     {
