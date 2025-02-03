@@ -1,0 +1,396 @@
+1- Relacion Application con Domain
+2- Relacion Infra con Application
+3- Relacion Infra con Domain
+4- Relacion Web.API con Infra 
+
+5- Poner como archivo solucion a API
+
+Domain
+6-Crear Carpeta Primitive
+7-Crear archivos AggregateRoot y DomainEvent y IUnitOfWork
+
+
+************* Librerias a installar: ***************
+*MediarR Normal en -->> Domain y Application
+*FluentValidation normal y el ASPNetCore en-->> Application
+*ErrorOr en -->> Domain, Application y Web.API
+
+
+8- Crear carpeta ValueObject en Domain
+9- Se crea un value Object de acuerdo a la necesidad, en este caso usare para validad el numero de celular
+
+10- Se crea una carperta en Domain y se crea el primer Aggregate que lo vamos a llamar Customer
+De ahi se agrega los demas archivos conocidos.
+
+
+Nos vamos para la Capa Application *************
+
+11-Creamos la clase DependecyInjection  
+12-Creamos la clase ApplicationAssemblyReference
+
+13-Creamos una carpeta llamada Data y dentro una interface llamada IApplicationDbContext
+
+
+
+************* Librerias a installar:*********************
+* EntityFrameworkCore en -->> Application
+* Microsoft.EntityFrameworkCore.SqlServer -->> Infra
+* efCore Design en -->> Web.API
+
+
+
+14- Empezamos la implementacion de CQRS, creamos la carpeta Customer en Application y dentro una carperta Create
+Ahi se agrega los archivos normalmente, el command, el handler y el validator (este aun no)
+
+************* Capa de Infra 
+
+15- Se crea la carpeta Persistance y dentro el archivo ApplicationDbContext, ese herada/implementa de DbContext, IApplicationDbContext y IUnitOfWork
+El IPublisher de MediarR se usa para publicar los eventos de dominio
+El dominio no debe ser una representacion exacta de tabla de datos sino una entidad logica independiente de cualquier contexto de informacion.
+Ahi se tiene que sobre escribir dos metodos
+
+16- Dentro de la carperta Persistance se crea la carpeta Repository y se crea el primer archivo CustomerRepository y implementa:
+-->> public class CustomerRepository(ApplicationDbContext context) : ICustomerRepository 
+		private readonly ApplicationDbContext _context = context ?? throw new ArgumentNullException(nameof(context));
+
+17- Se crea una nueva carpeta llamada configuration, ahi ira el archivo CustomerCon y ese implementa
+ -->> public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
+ 
+builder.HasKey(c => c.Id);
+
+builder.Property(c => c.Id)
+    .HasConversion(
+        customerId => customerId.Value,
+        value => new CustomerId(value)
+);
+ 
+18- Se crea un archivo de DependecyInjection fuera de todo pero dentro de Infra, quedando algo asi:
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddPersistance(configuration); 
+        return services;
+    }
+
+    public static IServiceCollection AddPersistance(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(configuration.GetConnectionString("Database")));
+
+        services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
+
+        services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<ApplicationDbContext>());
+
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
+
+        return services;
+    }
+
+
+Se agrega la cadena de conexion en el appsetting.json
+
+"ConnectionStrings": {
+  "Database": "Data Source=KyrieDan\\SQLEXPRESS; Initial Catalog=BaseTemplate;Integrated Security=True; TrustServerCertificate=True;"
+}
+
+19- Se crea un archivo de DependecyInjection en Web.API
+
+20-Se crea un archivo de PresentationAssemblyReference
+
+public class PresentationAssemblyReference
+{
+    internal static readonly Assembly assembly = typeof(PresentationAssemblyReference).Assembly;
+}
+
+21- Se borra esto en program.cs
+
+builder.Services.AddControllers();
+// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+y se coloca en el DependecyInjection de API, quedando asi:
+
+public static class DependecyInjection
+{
+    public static IServiceCollection AddPresentation(this IServiceCollection services)
+    {
+        services.AddControllers();
+        services.AddEndpointsApiExplorer();
+        services.AddSwaggerGen();
+            
+        return services;
+    }
+}
+
+En el Program.cs queda asi:
+
+builder.Services.AddPresentation()
+                .AddInfrastructure(builder.Configuration)
+                .AddApplication();
+
+22-Creamos una carperta en Web.API para poder correr las migraciones, se llama Extensions y dentro el archivo MigrationExtensions, queda asi:
+
+public static class MigrationExtensions
+{
+    public static void ApplyMigrations(this WebApplication app)
+    {
+        using IServiceScope scope = app.Services.CreateScope();
+
+        ApplicationDbContext dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        dbContext.Database.Migrate();
+    }
+}
+
+23- Arriba se instalo en EF Design, ahora en el Program se añade lo siguiente:
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+    app.ApplyMigrations(); //Esto es lo nuevo
+}
+
+Ahora se hace las migraciones con el comando:
+
+		dotnet ef migrations add InitialMigration -p Infraestructure -s Web.API -o Persistance/Migrations
+
+Para hacer el update es asi:
+
+		dotnet ef database update -p HR-Platform.Infrastructure -s HR-Platform.API
+
+
+24- Se crea dos carpetas en WEb.Api, una llamada Errors y otra Http
+En Errors se crea el archivo ApplicationProblemDetailsFactory e implementa:
+
+public class ApplicationProblemDetailsFactory : ProblemDetailsFactory {}
+
+En Http se crea el archivo HttpContextItemKeys e implementa:
+public static class HttpContextItemKeys
+{
+    public const string Errors = "errors";
+}
+
+25-  Luego de agregar todo en el archivo Errors, hay que inyectarlo en el Program.cs Asi:
+
+app.UseExceptionHandler("/error"); // <---
+app.UseHttpsRedirection();
+
+26- Se Crea el controllador ApiController que hereda de BaseCotroller
+27- En el controllador hay que crear la ruta de /error, asi que se crea ErrorsController
+
+28- SE AGREGARA FLUENT VALIDATOR
+
+29- En Application se crea una carperta llamada Common y dentro una carperta llamada Behavior y dentro de 
+este se crea un archivo llamado ValidationBehavior
+
+30- Ahora se tiene que inyectar en el DependecyInjection de Application, asi:
+
+  services.AddScoped(
+      typeof(IPipelineBehavior<,>),
+      typeof(ValidationBehavior<,>)
+  );
+
+31- Ahora vamos en donde estan los create command de Customer y creamos el CreateCustomerCommandValidator
+
+32- Luego de todo esto, creamos la carpeta Middleware en Web.API y creamos el archivo GloblalExceptionHandlingMiddleware, tiene el contenido:
+
+public class GloblalExceptionHandlingMiddleware(ILogger<GloblalExceptionHandlingMiddleware> logger) : IMiddleware
+{
+    private readonly ILogger<GloblalExceptionHandlingMiddleware> _logger = logger;
+
+    public async Task InvokeAsync(HttpContext context, RequestDelegate next)
+    {
+        try
+        {
+            await next(context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("{Message}", ex.Message);
+
+            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+
+            ProblemDetails problem = new()
+            {
+                Status = (int)HttpStatusCode.InternalServerError,
+                Type = "Server Error",
+                Title = "Server Error",
+                Detail = "An internal server has ocurred."
+            };
+
+            string json = JsonSerializer.Serialize(problem);
+
+            context.Response.ContentType = "application/json";
+
+            await context.Response.WriteAsync(json);
+        }
+    }
+}
+
+
+33- Ahora vamos al DependecyInjection en Web.API e inyectamos el middleware asi:
+
+        services.AddTransient<GloblalExceptionHandlingMiddleware>();
+
+34- y por ultimo en el program hay que llamarlo, agregamos esto:
+
+app.UseMiddleware<GloblalExceptionHandlingMiddleware>();
+
+arriba de app.MapControllers(); 
+
+35- Microsoft.AspNetCore.Authentication.JwtBearer
+36-
+37-
+
+
+
+
+************************ LINKS ***********************
+
+Docker: https://github.com/jeangatto/ASP.NET-Core-API-DDD-SOLID/tree/main
+
+
+
+************ Info **************
+
+El DependecyInjection de la capa Web.API con Cors y Auth en Swagger queda asi:
+
+public static class DependecyInjection
+{
+    public static IServiceCollection AddPresentation(this IServiceCollection services)
+    {
+        services.AddCors(options => options.AddPolicy("MyAllowSpecificOrigins", builder =>
+        {
+            builder.AllowAnyOrigin()
+                   .AllowAnyMethod()
+                   .AllowAnyHeader()
+                   .WithExposedHeaders("Content-Disposition", "downloadfilename");
+        }));
+
+        services.AddControllers();
+        services.AddEndpointsApiExplorer();
+
+        services.AddSwaggerGen(options => 
+        {
+            var jwtSecurityScheme = new OpenApiSecurityScheme
+            {
+                BearerFormat = "JWT",
+                Name = "Authorization",
+                In = ParameterLocation.Header,
+                Type = SecuritySchemeType.ApiKey,
+                Description = "Please insert JWT with Bearer into field",
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            };
+            options.AddSecurityDefinition("Bearer", jwtSecurityScheme);
+            options.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
+                { jwtSecurityScheme , Array.Empty<string>() }
+            });
+        });
+		
+        services.AddTransient<GloblalExceptionHandlingMiddleware>();
+
+        return services;
+    }
+}
+
+
+{
+  "name": "Danilo",
+  "lastName": "Pruba",
+  "email": "test@test.com",
+  "phoneNumber": "+2155111212"
+}
+
+
+
+
+Infraestructure
+
+namespace Infrastructure;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddPersistance(configuration); 
+        services.AddAuth(configuration); 
+
+        return services;
+    }
+
+    public static IServiceCollection AddAuth(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<JwtSettings>(configuration.GetSection("JwtSettings"));
+        services.AddSingleton<IJwtTokenService, JwtTokenService>();
+
+        var jwtSettings = new JwtSettings();
+        configuration.GetSection("JwtSettings").Bind(jwtSettings);
+
+        var key = Encoding.UTF8.GetBytes(jwtSettings.Secret);
+
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = jwtSettings.Issuer,
+                    ValidAudience = jwtSettings.Audience,
+                    IssuerSigningKey = new SymmetricSecurityKey(key)
+                };
+            });
+
+        services.AddAuthorization();
+
+
+        return services;
+    }
+
+        public static IServiceCollection AddPersistance(this IServiceCollection services, IConfiguration configuration)
+    {
+
+        services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(configuration.GetConnectionString("Database")));
+
+        services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
+
+        services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<ApplicationDbContext>());
+
+
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
+
+        return services;
+    }
+}
+
+
+
+
+En la carpeta de Benefits hay:
+ public CompanyId CompanyId { get; set; }
+ public Company Company { get; set; }
+ 
+ y
+ 
+ public List<CollaboratorBenefitClaim> CollaboratorBenefitClaims { get; set; }
+ 
+ 
+ En la configuracion se hace esto: 
+ 
+        builder.HasOne(p => p.Company).WithMany(c => c.Benefits).HasForeignKey(c => c.CompanyId);
+ 
+ y
+ 
+        builder.HasMany(c => c.CollaboratorBenefitClaims).WithOne(ct => ct.Benefit).HasForeignKey(ct => ct.BenefitId);
+ 
+ 
