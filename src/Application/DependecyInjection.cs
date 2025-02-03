@@ -1,4 +1,6 @@
 ﻿using Application.Common.Behaviors;
+using Application.Interfacess;
+using Application.Servicess;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,6 +22,8 @@ public static class DependecyInjection
         );
 
         services.AddValidatorsFromAssemblyContaining<ApplicationAssemblyReference>();
+
+        services.AddScoped<IPasswordHasher, PasswordHasher>();
 
         return services;    
     }
